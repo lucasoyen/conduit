@@ -3,7 +3,7 @@ from typing import Optional
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-SERVER = os.environ.get("CONDUIT_SERVER", "http://localhost:8000")
+SERVER = os.environ.get("CONDUIT_SERVER", "http://localhost:2006")
 
 mcp = FastMCP("conduit")
 

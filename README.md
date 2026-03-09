@@ -56,7 +56,7 @@ $env:CONDUIT_PROJECTS_DIR = "C:\your\preferred\path"
 
 ```powershell
 python main.py
-# Uvicorn running on http://0.0.0.0:8000
+# Uvicorn running on http://0.0.0.0:2006
 ```
 
 ### Auto-start on login (Task Scheduler)
@@ -109,7 +109,7 @@ Find your desktop's Tailscale IP in the Tailscale app or with `tailscale ip`.
 
 ```bash
 # Add to ~/.bashrc or ~/.zshrc
-export CONDUIT_SERVER="http://<tailscale-ip>:8000"
+export CONDUIT_SERVER="http://<tailscale-ip>:2006"
 ```
 
 ### Install the CLI
@@ -126,7 +126,7 @@ pip install --editable .
 
 ```bash
 claude mcp add conduit python /path/to/conduit/mcp/server.py \
-  -e CONDUIT_SERVER=http://<tailscale-ip>:8000
+  -e CONDUIT_SERVER=http://<tailscale-ip>:2006
 ```
 
 Install MCP dependencies:
@@ -185,18 +185,18 @@ Available MCP tools:
 
 ```bash
 # Submit
-curl -X POST http://<server>:8000/jobs \
+curl -X POST http://<server>:2006/jobs \
   -H "Content-Type: application/json" \
   -d '{"name":"test","command":"nvidia-smi"}'
 
 # List
-curl http://<server>:8000/jobs
+curl http://<server>:2006/jobs
 
 # Output
-curl "http://<server>:8000/jobs/<id>/output?lines=50"
+curl "http://<server>:2006/jobs/<id>/output?lines=50"
 
 # Kill
-curl -X DELETE http://<server>:8000/jobs/<id>
+curl -X DELETE http://<server>:2006/jobs/<id>
 ```
 
 ---
@@ -219,4 +219,4 @@ The venv persists between runs. Dependencies are re-installed on every pull so c
 | Variable | Where | Description |
 |----------|-------|-------------|
 | `CONDUIT_PROJECTS_DIR` | Desktop | Where repos are cloned (default: `~/projects`) |
-| `CONDUIT_SERVER` | Laptop | Job server URL (default: `http://localhost:8000`) |
+| `CONDUIT_SERVER` | Laptop | Job server URL (default: `http://localhost:2006`) |

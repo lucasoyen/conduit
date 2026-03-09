@@ -4,7 +4,7 @@ import sys
 import click
 import httpx
 
-SERVER = os.environ.get("CONDUIT_SERVER", "http://localhost:8000")
+SERVER = os.environ.get("CONDUIT_SERVER", "http://localhost:2006")
 
 
 def api(method: str, path: str, **kwargs):
