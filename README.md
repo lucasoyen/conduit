@@ -10,11 +10,14 @@ Submit jobs from the CLI or let Claude Code dispatch them directly — git clone
 laptop                               desktop (GPU machine)
 ------                               ---------------------
 conduit CLI  ──── HTTP (Tailscale) ───► FastAPI server
-MCP server ───────────────────────►   clones repo → C:\projects\<repo>
+MCP server ───────────────────────►   pulls repo
                                        creates .venv, installs deps
                                        runs your command
                                        streams output to logs/
+                                       pushes any changed files back
 ```
+
+Git is used for both directions — the laptop pushes before submitting, the server pulls on receive, and after the job finishes the server commits and pushes any new/changed files back. The laptop pulls automatically when it detects `files_updated`.
 
 ## Project structure
 
@@ -143,14 +146,14 @@ Also in NVIDIA Control Panel → Manage 3D Settings → Power management mode �
 
 Find your desktop's Tailscale IP in the Tailscale app or with `tailscale ip`.
 
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-export CONDUIT_SERVER="http://<tailscale-ip>:2006"
+```powershell
+# Add to $PROFILE
+$env:CONDUIT_SERVER = "http://<tailscale-ip>:2006"
 ```
 
 ### Install the CLI
 
-```bash
+```powershell
 cd path/to/conduit/cli
 pip install -r requirements.txt
 
@@ -160,14 +163,14 @@ pip install --editable .
 
 ### Add the MCP server to Claude Code
 
-```bash
-claude mcp add conduit python /path/to/conduit/mcp/server.py \
+```powershell
+claude mcp add conduit python C:\path\to\conduit\mcp\server.py `
   -e CONDUIT_SERVER=http://<tailscale-ip>:2006
 ```
 
 Install MCP dependencies:
 
-```bash
+```powershell
 cd path/to/conduit/mcp
 pip install -r requirements.txt
 ```
@@ -182,7 +185,7 @@ pip install -r requirements.txt
 # Run a command (code already on the machine)
 conduit run "python train.py --epochs 10"
 
-# Clone a repo and run
+# Clone a repo and run (pushes local changes first, pulls results when done)
 conduit run "python train.py" --repo https://github.com/you/project --name "training run 1"
 
 # Pass environment variables
@@ -195,14 +198,14 @@ conduit jobs
 conduit logs <job-id>
 conduit logs <job-id> --lines 100
 
-# Full job details
+# Full job details (auto-pulls if job is done and remote pushed changes)
 conduit status <job-id>
 
 # Kill a job
 conduit kill <job-id>
 
 # Write a file to the remote machine (e.g. push a .env with secrets)
-conduit write .env "C:/Users/lucas/personal-projects/myrepo/.env"
+conduit write .env "C:/path/to/repo/.env"
 ```
 
 ### Claude Code (MCP)
@@ -211,13 +214,15 @@ Once configured, Claude Code can submit and monitor jobs directly:
 
 > "Run train.py on my GPU machine using https://github.com/you/project"
 
+Claude can check in on a job at any time using `job_status` or `job_output` — both are safe to poll repeatedly during execution.
+
 Available MCP tools:
 | Tool | Description |
 |------|-------------|
-| `run_job(command, git_repo?, working_dir?, name?)` | Submit a job |
-| `job_status(job_id)` | Status + last 20 lines of output |
+| `run_job(command, git_repo?, working_dir?, name?, local_repo_path?)` | Submit a job. Pass `local_repo_path` to auto-push before submitting. |
+| `job_status(job_id, local_repo_path?)` | Status + last 20 lines. Pass `local_repo_path` to auto-pull when done. |
 | `list_jobs()` | All jobs |
-| `job_output(job_id, lines?)` | Full log tail |
+| `job_output(job_id, lines?)` | Full log tail — safe to call anytime |
 | `kill_job(job_id)` | Terminate a job |
 | `write_file(path, content)` | Write a file on the remote machine |
 
@@ -241,8 +246,21 @@ curl -X DELETE http://<server>:2006/jobs/<id>
 # Write a file
 curl -X POST http://<server>:2006/files \
   -H "Content-Type: application/json" \
-  -d '{"path":"C:/Users/lucas/personal-projects/myrepo/.env","content":"API_KEY=xxx\n"}'
+  -d '{"path":"C:/path/to/repo/.env","content":"API_KEY=xxx\n"}'
 ```
+
+---
+
+## Git sync
+
+When `git_repo` is provided, conduit handles sync automatically:
+
+1. **Pre-submit (laptop)**: `git push` so the server gets your latest code
+2. **On receive (server)**: `git pull` to get the latest
+3. **Post-job (server)**: if any files changed, `git add -A && git commit && git push`
+4. **Post-status (laptop)**: if `files_updated` is set, `git pull` to get results back
+
+This means model checkpoints, output files, and logs written during a job come back to your laptop automatically via git. For large binary files (e.g. model weights) consider using Git LFS or writing outputs to cloud storage instead.
 
 ---
 

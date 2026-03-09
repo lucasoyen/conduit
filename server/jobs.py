@@ -1,5 +1,6 @@
 import os
 import subprocess
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -22,11 +23,11 @@ def _ensure_repo(git_repo: str, log_file) -> Path:
     repo_name = _repo_name(git_repo)
     repo_path = PROJECTS_DIR / repo_name
     if repo_path.exists():
-        log_file.write(f"[rgpu] Pulling {repo_path}\n")
+        log_file.write(f"[conduit] Pulling {repo_path}\n")
         log_file.flush()
         subprocess.run(["git", "pull"], cwd=repo_path, check=True, stdout=log_file, stderr=log_file)
     else:
-        log_file.write(f"[rgpu] Cloning {git_repo} -> {repo_path}\n")
+        log_file.write(f"[conduit] Cloning {git_repo} -> {repo_path}\n")
         log_file.flush()
         subprocess.run(["git", "clone", git_repo, str(repo_path)], check=True, stdout=log_file, stderr=log_file)
     return repo_path
@@ -35,18 +36,18 @@ def _ensure_repo(git_repo: str, log_file) -> Path:
 def _ensure_venv(repo_path: Path, log_file) -> Path:
     venv_path = repo_path / ".venv"
     if not venv_path.exists():
-        log_file.write(f"[rgpu] Creating venv at {venv_path}\n")
+        log_file.write(f"[conduit] Creating venv at {venv_path}\n")
         log_file.flush()
         subprocess.run(["python", "-m", "venv", str(venv_path)], check=True, stdout=log_file, stderr=log_file)
 
     pip = venv_path / "Scripts" / "pip.exe"
 
     if (repo_path / "requirements.txt").exists():
-        log_file.write("[rgpu] Installing requirements.txt\n")
+        log_file.write("[conduit] Installing requirements.txt\n")
         log_file.flush()
         subprocess.run([str(pip), "install", "-r", "requirements.txt"], cwd=repo_path, check=True, stdout=log_file, stderr=log_file)
     elif (repo_path / "pyproject.toml").exists():
-        log_file.write("[rgpu] Installing pyproject.toml\n")
+        log_file.write("[conduit] Installing pyproject.toml\n")
         log_file.flush()
         subprocess.run([str(pip), "install", "-e", "."], cwd=repo_path, check=True, stdout=log_file, stderr=log_file)
 
@@ -60,6 +61,42 @@ def _venv_env(venv_path: Path, base_env: dict) -> dict:
     env["PATH"] = scripts_dir + os.pathsep + env.get("PATH", "")
     env.pop("PYTHONHOME", None)
     return env
+
+
+def _push_results(job: dict, repo_path: Path):
+    """Wait for job to finish, then commit and push any changes."""
+    process = job["process"]
+    process.wait()
+
+    log_path = Path(job["log_path"])
+
+    status_result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+    )
+
+    if not status_result.stdout.strip():
+        return
+
+    with open(log_path, "a") as f:
+        f.write("\n[conduit] Committing and pushing changes...\n")
+
+    try:
+        subprocess.run(["git", "add", "-A"], cwd=repo_path, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"conduit: job {job['id']}"],
+            cwd=repo_path,
+            check=True,
+        )
+        subprocess.run(["git", "push"], cwd=repo_path, check=True)
+        job["files_updated"] = True
+        with open(log_path, "a") as f:
+            f.write("[conduit] Push complete.\n")
+    except subprocess.CalledProcessError as e:
+        with open(log_path, "a") as f:
+            f.write(f"[conduit] Git push failed: {e}\n")
 
 
 def submit_job(
@@ -86,6 +123,7 @@ def submit_job(
         "start_time": datetime.utcnow().isoformat(),
         "pid": None,
         "process": None,
+        "files_updated": False,
     }
     jobs[job_id] = job
 
@@ -95,6 +133,7 @@ def submit_job(
             proc_env.update(env)
 
         with open(log_path, "w") as log_file:
+            repo_path = None
             if git_repo:
                 repo_path = _ensure_repo(git_repo, log_file)
                 resolved_working_dir = resolved_working_dir or str(repo_path)
@@ -103,7 +142,7 @@ def submit_job(
 
             job["working_dir"] = resolved_working_dir
 
-            log_file.write(f"[rgpu] Running: {command}\n\n")
+            log_file.write(f"[conduit] Running: {command}\n\n")
             log_file.flush()
 
             process = subprocess.Popen(
@@ -119,10 +158,14 @@ def submit_job(
         job["pid"] = process.pid
         job["status"] = "running"
 
+        if git_repo and repo_path:
+            thread = threading.Thread(target=_push_results, args=(job, repo_path), daemon=True)
+            thread.start()
+
     except Exception as e:
         job["status"] = "failed"
         with open(log_path, "a") as f:
-            f.write(f"\n[rgpu] Error: {e}\n")
+            f.write(f"\n[conduit] Error: {e}\n")
 
     return _serialize(job)
 
@@ -194,4 +237,5 @@ def _serialize(job: dict) -> dict:
         "status": job["status"],
         "start_time": job["start_time"],
         "pid": job["pid"],
+        "files_updated": job["files_updated"],
     }

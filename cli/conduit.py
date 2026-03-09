@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import subprocess
 import click
 import httpx
 
@@ -26,6 +27,28 @@ def cli():
     """conduit — remote GPU job runner"""
 
 
+def _git_push():
+    try:
+        result = subprocess.run(["git", "push"], capture_output=True, text=True)
+        if result.returncode == 0:
+            click.echo("[conduit] Pushed local changes to remote.")
+        else:
+            click.echo(f"[conduit] Warning: git push failed:\n{result.stderr.strip()}", err=True)
+    except FileNotFoundError:
+        pass  # git not available or not in a repo
+
+
+def _git_pull():
+    try:
+        result = subprocess.run(["git", "pull"], capture_output=True, text=True)
+        if result.returncode == 0:
+            click.echo(f"[conduit] Pulled remote changes:\n{result.stdout.strip()}")
+        else:
+            click.echo(f"[conduit] Warning: git pull failed:\n{result.stderr.strip()}", err=True)
+    except FileNotFoundError:
+        pass
+
+
 @cli.command("run")
 @click.argument("command", nargs=-1, required=True)
 @click.option("--repo", default=None, help="Git repo URL to clone/pull before running")
@@ -33,9 +56,11 @@ def cli():
 @click.option("--dir", "working_dir", default=None, help="Working directory on the server")
 @click.option("--env", "-e", multiple=True, metavar="KEY=VALUE", help="Extra env vars (repeatable)")
 def run_job(command, repo, name, working_dir, env):
-    """Submit a job: rgpu run <command> [options]"""
+    """Submit a job: conduit run <command> [options]"""
     cmd_str = " ".join(command)
     job_name = name or cmd_str[:60]
+    if repo:
+        _git_push()
 
     env_dict = {}
     for item in env:
@@ -92,6 +117,9 @@ def status(job_id):
     j = api("GET", f"/jobs/{job_id}")
     for k, v in j.items():
         click.echo(f"{k:<15} {v}")
+    if j.get("status") in ("done", "failed") and j.get("files_updated"):
+        click.echo("\n[conduit] Remote pushed changes. Pulling...")
+        _git_pull()
 
 
 @cli.command("write")
