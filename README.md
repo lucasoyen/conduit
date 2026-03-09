@@ -59,23 +59,59 @@ python main.py
 # Uvicorn running on http://0.0.0.0:2006
 ```
 
-### Auto-start on login (Task Scheduler)
+### Auto-start on login and wake from sleep (Task Scheduler)
+
+Run as admin. Step 1 — paste the entire block to define the task XML:
 
 ```powershell
-# Run as admin
-$action = New-ScheduledTaskAction `
-  -Execute "C:\path\to\conduit\server\.venv\Scripts\python.exe" `
-  -Argument "C:\path\to\conduit\server\main.py" `
-  -WorkingDirectory "C:\path\to\conduit\server"
-
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-
-Register-ScheduledTask -TaskName "conduit-server" -Action $action -Trigger $trigger -RunLevel Highest
+$xml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+    <EventTrigger>
+      <Enabled>true</Enabled>
+      <Subscription>&lt;QueryList&gt;&lt;Query Id="0"&gt;&lt;Select Path="System"&gt;*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=107]]&lt;/Select&gt;&lt;/Query&gt;&lt;/QueryList&gt;</Subscription>
+    </EventTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions>
+    <Exec>
+      <Command>C:\Users\lucas\personal-projects\conduit\server\.venv\Scripts\python.exe</Command>
+      <Arguments>C:\Users\lucas\personal-projects\conduit\server\main.py</Arguments>
+      <WorkingDirectory>C:\Users\lucas\personal-projects\conduit\server</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"@
 ```
 
-Start it immediately without rebooting:
+Step 2 — register it:
+```powershell
+Register-ScheduledTask -TaskName "conduit-server" -Xml $xml
+```
+
+Step 3 — start immediately without rebooting:
 ```powershell
 Start-ScheduledTask -TaskName "conduit-server"
+```
+
+To remove it:
+```powershell
+Unregister-ScheduledTask -TaskName "conduit-server" -Confirm:$false
 ```
 
 ### Recommended machine settings
