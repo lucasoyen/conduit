@@ -90,9 +90,9 @@ $xml = @"
   </Settings>
   <Actions>
     <Exec>
-      <Command>C:\Users\lucas\personal-projects\conduit\server\.venv\Scripts\python.exe</Command>
-      <Arguments>C:\Users\lucas\personal-projects\conduit\server\main.py</Arguments>
-      <WorkingDirectory>C:\Users\lucas\personal-projects\conduit\server</WorkingDirectory>
+      <Command>C:\path\to\conduit\server\.venv\Scripts\python.exe</Command>
+      <Arguments>C:\path\to\conduit\server\main.py</Arguments>
+      <WorkingDirectory>C:\path\to\conduit\server</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>
