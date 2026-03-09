@@ -94,6 +94,17 @@ def status(job_id):
         click.echo(f"{k:<15} {v}")
 
 
+@cli.command("write")
+@click.argument("local_file", type=click.Path(exists=True))
+@click.argument("remote_path")
+def write_file(local_file, remote_path):
+    """Write a local file to the remote machine: conduit write .env C:/projects/myrepo/.env"""
+    with open(local_file, "r") as f:
+        content = f.read()
+    result = api("POST", "/files", json={"path": remote_path, "content": content})
+    click.echo(f"Written to {result['path']}")
+
+
 @cli.command("kill")
 @click.argument("job_id")
 def kill(job_id):

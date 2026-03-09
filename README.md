@@ -164,6 +164,9 @@ conduit status <job-id>
 
 # Kill a job
 conduit kill <job-id>
+
+# Write a file to the remote machine (e.g. push a .env with secrets)
+conduit write .env "C:/Users/lucas/personal-projects/myrepo/.env"
 ```
 
 ### Claude Code (MCP)
@@ -180,6 +183,7 @@ Available MCP tools:
 | `list_jobs()` | All jobs |
 | `job_output(job_id, lines?)` | Full log tail |
 | `kill_job(job_id)` | Terminate a job |
+| `write_file(path, content)` | Write a file on the remote machine |
 
 ### Direct HTTP
 
@@ -197,6 +201,11 @@ curl "http://<server>:2006/jobs/<id>/output?lines=50"
 
 # Kill
 curl -X DELETE http://<server>:2006/jobs/<id>
+
+# Write a file
+curl -X POST http://<server>:2006/files \
+  -H "Content-Type: application/json" \
+  -d '{"path":"C:/Users/lucas/personal-projects/myrepo/.env","content":"API_KEY=xxx\n"}'
 ```
 
 ---

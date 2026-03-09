@@ -56,6 +56,12 @@ def job_output(job_id: str, lines: int = 100) -> str:
 
 
 @mcp.tool()
+def write_file(path: str, content: str) -> dict:
+    """Write a file on the remote machine. Useful for creating .env files with secrets."""
+    return _api("POST", "/files", json={"path": path, "content": content})
+
+
+@mcp.tool()
 def kill_job(job_id: str) -> dict:
     """Kill a running job by ID."""
     return _api("DELETE", f"/jobs/{job_id}")

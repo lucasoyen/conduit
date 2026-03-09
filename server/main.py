@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from pathlib import Path
 import jobs as job_store
 
 app = FastAPI(title="conduit job server")
@@ -12,6 +13,11 @@ class JobRequest(BaseModel):
     git_repo: Optional[str] = None
     working_dir: Optional[str] = None
     env: Optional[dict[str, str]] = None
+
+
+class FileWriteRequest(BaseModel):
+    path: str
+    content: str
 
 
 @app.post("/jobs", status_code=201)
@@ -53,6 +59,14 @@ def kill_job(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@app.post("/files")
+def write_file(req: FileWriteRequest):
+    path = Path(req.path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(req.content)
+    return {"path": str(path)}
 
 
 if __name__ == "__main__":
